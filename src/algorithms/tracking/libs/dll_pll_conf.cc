@@ -126,6 +126,7 @@ void Dll_Pll_Conf::SetFromConfiguration(const ConfigurationInterface *configurat
     
     // MEDLL
     medll_open = configuration->property(role + ".medll_open", medll_open);
+    medll_start_chip = configuration->property(role + ".medll_start_chip", medll_start_chip);
     medll_taps = configuration->property(role + ".medll_taps", medll_taps);
-    medll_space_chips = configuration->property(role + ".medll_space_chips", medll_space_chips);
+    medll_step_chip = configuration->property(role + ".medll_step_chip", medll_step_chip);
 }

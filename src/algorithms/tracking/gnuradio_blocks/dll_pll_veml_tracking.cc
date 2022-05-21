@@ -459,9 +459,9 @@ dll_pll_veml_tracking::dll_pll_veml_tracking(const Dll_Pll_Conf &conf_)
     
     if(d_veml && d_trk_parameters.medll_open)
     {
-    	LOG(WARNING) << "veml open, so medll close\n";
-		std::cout << "veml open, so medll close\n";
-		d_trk_parameters.medll_open = false;
+    	d_trk_parameters.medll_open = false;
+    	std::cout << "Channel " << d_channel << " veml open, so medll close\n";
+    	LOG(INFO) << "Channel " << d_channel << " veml open, so medll close";
     }
 
     // Initial code frequency basis of NCO
@@ -489,7 +489,7 @@ dll_pll_veml_tracking::dll_pll_veml_tracking(const Dll_Pll_Conf &conf_)
 			}
 			else
 			{
-				d_n_correlator_taps = 4 * d_trk_parameters.medll_taps + 3;
+				d_n_correlator_taps = 3 + d_trk_parameters.medll_taps;
 			}
         }
 
@@ -513,38 +513,18 @@ dll_pll_veml_tracking::dll_pll_veml_tracking(const Dll_Pll_Conf &conf_)
         }
     else
         {
-			if (!d_trk_parameters.medll_open)
+			d_Very_Early = nullptr;
+			d_Early = &d_correlator_outs[0];
+			d_Prompt = &d_correlator_outs[1];
+			d_Late = &d_correlator_outs[2];
+			d_Very_Late = nullptr;
+			d_local_code_shift_chips[0] = -d_trk_parameters.early_late_space_chips * static_cast<float>(d_code_samples_per_chip);
+			d_local_code_shift_chips[1] = 0.0;
+			d_local_code_shift_chips[2] = d_trk_parameters.early_late_space_chips * static_cast<float>(d_code_samples_per_chip);
+			d_prompt_data_shift = &d_local_code_shift_chips[1];
+			for(int i=0; i<d_trk_parameters.medll_taps; i++)
 			{
-				d_Very_Early = nullptr;
-				d_Early = &d_correlator_outs[0];
-				d_Prompt = &d_correlator_outs[1];
-				d_Late = &d_correlator_outs[2];
-				d_Very_Late = nullptr;
-				d_local_code_shift_chips[0] = -d_trk_parameters.early_late_space_chips * static_cast<float>(d_code_samples_per_chip);
-				d_local_code_shift_chips[1] = 0.0;
-				d_local_code_shift_chips[2] = d_trk_parameters.early_late_space_chips * static_cast<float>(d_code_samples_per_chip);
-				d_prompt_data_shift = &d_local_code_shift_chips[1];
-			}
-			else
-			{
-				d_Very_Early = nullptr;
-				d_Early = &d_correlator_outs[d_trk_parameters.medll_taps];
-				d_Prompt = &d_correlator_outs[2 * d_trk_parameters.medll_taps + 1];
-				d_Late = &d_correlator_outs[3 * d_trk_parameters.medll_taps + 2];
-				d_Very_Late = nullptr;
-				d_local_code_shift_chips[2 * d_trk_parameters.medll_taps + 1] = 0.0;
-				for(int i=0; i<=d_trk_parameters.medll_taps; i++)
-				{
-					// E left
-					d_local_code_shift_chips[d_trk_parameters.medll_taps - i] = (-d_trk_parameters.early_late_space_chips - static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-					// E right
-					d_local_code_shift_chips[d_trk_parameters.medll_taps + i] = (-d_trk_parameters.early_late_space_chips + static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-					// L left
-					d_local_code_shift_chips[3 * d_trk_parameters.medll_taps + 2 - i] = (d_trk_parameters.early_late_space_chips - static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-					// L right
-					d_local_code_shift_chips[3 * d_trk_parameters.medll_taps + 2 + i] = (d_trk_parameters.early_late_space_chips + static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-				}
-				d_prompt_data_shift = &d_local_code_shift_chips[2 * d_trk_parameters.medll_taps + 1];
+				d_local_code_shift_chips[]
 			}
         }
 
