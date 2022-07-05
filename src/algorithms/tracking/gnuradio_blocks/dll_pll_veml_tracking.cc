@@ -482,14 +482,11 @@ dll_pll_veml_tracking::dll_pll_veml_tracking(const Dll_Pll_Conf &conf_)
         }
     else
         {
-			if (!d_trk_parameters.medll_open)
+			// Early, Prompt, Late
+			d_n_correlator_taps = 3;
+			if (d_trk_parameters.medll_open)
 			{
-				// Early, Prompt, Late
-				d_n_correlator_taps = 3;
-			}
-			else
-			{
-				d_n_correlator_taps = 3 + d_trk_parameters.medll_taps;
+				d_n_correlator_taps = d_n_correlator_taps + d_trk_parameters.medll_taps;
 			}
         }
 
@@ -522,9 +519,12 @@ dll_pll_veml_tracking::dll_pll_veml_tracking(const Dll_Pll_Conf &conf_)
 			d_local_code_shift_chips[1] = 0.0;
 			d_local_code_shift_chips[2] = d_trk_parameters.early_late_space_chips * static_cast<float>(d_code_samples_per_chip);
 			d_prompt_data_shift = &d_local_code_shift_chips[1];
-			for(int i=0; i<d_trk_parameters.medll_taps; i++)
+			if (d_trk_parameters.medll_open)
 			{
-				d_local_code_shift_chips[]
+				for(int i=0; i<d_trk_parameters.medll_taps; i++)
+				{
+					d_local_code_shift_chips[i+3] = (d_trk_parameters.medll_start_chip +  static_cast<float>(i) * d_trk_parameters.medll_step_chip) * static_cast<float>(d_code_samples_per_chip);
+				}
 			}
         }
 
@@ -868,23 +868,13 @@ void dll_pll_veml_tracking::start_tracking()
         }
     else
         {
-			if (!d_trk_parameters.medll_open)
+			d_local_code_shift_chips[0] = -d_trk_parameters.early_late_space_chips * static_cast<float>(d_code_samples_per_chip);
+			d_local_code_shift_chips[2] = d_trk_parameters.early_late_space_chips * static_cast<float>(d_code_samples_per_chip);
+			if (d_trk_parameters.medll_open)
 			{
-				d_local_code_shift_chips[0] = -d_trk_parameters.early_late_space_chips * static_cast<float>(d_code_samples_per_chip);
-				d_local_code_shift_chips[2] = d_trk_parameters.early_late_space_chips * static_cast<float>(d_code_samples_per_chip);
-			}
-			else
-			{
-				for(int i=0; i<=d_trk_parameters.medll_taps; i++)
+				for(int i=0; i<d_trk_parameters.medll_taps; i++)
 				{
-					// E left
-					d_local_code_shift_chips[d_trk_parameters.medll_taps - i] = (-d_trk_parameters.early_late_space_chips - static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-					// E right
-					d_local_code_shift_chips[d_trk_parameters.medll_taps + i] = (-d_trk_parameters.early_late_space_chips + static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-					// L left
-					d_local_code_shift_chips[3 * d_trk_parameters.medll_taps + 2 - i] = (d_trk_parameters.early_late_space_chips - static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-					// L right
-					d_local_code_shift_chips[3 * d_trk_parameters.medll_taps + 2 + i] = (d_trk_parameters.early_late_space_chips + static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
+					d_local_code_shift_chips[i+3] = (d_trk_parameters.medll_start_chip +  static_cast<float>(i) * d_trk_parameters.medll_step_chip) * static_cast<float>(d_code_samples_per_chip);
 				}
 			}
         }
@@ -1089,68 +1079,66 @@ bool dll_pll_veml_tracking::cn0_and_tracking_lock_status(double coh_integration_
 	d_EVM = sqrt(d_EVM);
 	
 	// SCB( Sline zero point)
-	if (d_trk_parameters.medll_open && d_trk_parameters.medll_taps>=1 && !d_veml)
-	{
-		int n = d_trk_parameters.medll_taps * 2 + 1;
-		gr_complex tmp_E;
-		gr_complex tmp_L;
-		double tmp_x[n];
-		double tmp_y[n];
-		for(int i=0; i<=d_trk_parameters.medll_taps; i++)
-		{
-			//left
-			tmp_E = d_correlator_outs_accu[d_trk_parameters.medll_taps - i];
-			tmp_L = d_correlator_outs_accu[3 * d_trk_parameters.medll_taps + 2 - i];
-			tmp_x[d_trk_parameters.medll_taps - i] = -double(i) * d_trk_parameters.medll_space_chips;
-			tmp_y[d_trk_parameters.medll_taps - i] = dll_nc_e_minus_l_normalized(tmp_E, tmp_L, d_trk_parameters.spc, d_trk_parameters.slope, d_trk_parameters.y_intercept);
-			//right
-			tmp_E = d_correlator_outs_accu[d_trk_parameters.medll_taps + i];
-			tmp_L = d_correlator_outs_accu[3 * d_trk_parameters.medll_taps + 2 + i];
-			tmp_x[d_trk_parameters.medll_taps + i] = double(i) * d_trk_parameters.medll_space_chips;
-			tmp_y[d_trk_parameters.medll_taps + i] = dll_nc_e_minus_l_normalized(tmp_E, tmp_L, d_trk_parameters.spc, d_trk_parameters.slope, d_trk_parameters.y_intercept);
-		}
-		// The least square method fits a line
-		float A = 0.0;
-		float B = 0.0;
-		float C = 0.0;
-		float D = 0.0;
-		float E = 0.0;
-		float F = 0.0;
-		for (int i=0; i<n; i++)
-		{
-			A += tmp_x[i] * tmp_x[i];
-			B += tmp_x[i];
-			C += tmp_x[i] * tmp_y[i];
-			D += tmp_y[i];
-		}
-		float a, b, temp = 0;
-		temp = (n*A - B*B);
-		if(temp)
-		{
-			a = (n*C - B*D) / temp;
-			b = (A*D - B*C) / temp;
-			d_SCB = - b / a;
-		}
-		else
-		{
-			d_SCB = 0;
-		}
-		
-		float Xmean, Ymean;
-		Xmean = B / n;
-		Ymean = D / n;
-		float tempSumXX = 0.0, tempSumYY = 0.0;
-		for (int i=0; i<n; i++)
-		{
-			tempSumXX += (tmp_x[i] - Xmean) * (tmp_x[i] - Xmean);
-			tempSumYY += (tmp_y[i] - Ymean) * (tmp_y[i] - Ymean);
-			E += (tmp_x[i] - Xmean) * (tmp_y[i] - Ymean);
-		}
-		F = sqrt(tempSumXX) * sqrt(tempSumYY);
-		d_SCB_r = E / F;
-	}
-	
-	
+//	if (d_trk_parameters.medll_open && d_trk_parameters.medll_taps>=1 && !d_veml)
+//	{
+//		int n = d_trk_parameters.medll_taps * 2 + 1;
+//		gr_complex tmp_E;
+//		gr_complex tmp_L;
+//		double tmp_x[n];
+//		double tmp_y[n];
+//		for(int i=0; i<=d_trk_parameters.medll_taps; i++)
+//		{
+//			//left
+//			tmp_E = d_correlator_outs_accu[d_trk_parameters.medll_taps - i];
+//			tmp_L = d_correlator_outs_accu[3 * d_trk_parameters.medll_taps + 2 - i];
+//			tmp_x[d_trk_parameters.medll_taps - i] = -double(i) * d_trk_parameters.medll_space_chips;
+//			tmp_y[d_trk_parameters.medll_taps - i] = dll_nc_e_minus_l_normalized(tmp_E, tmp_L, d_trk_parameters.spc, d_trk_parameters.slope, d_trk_parameters.y_intercept);
+//			//right
+//			tmp_E = d_correlator_outs_accu[d_trk_parameters.medll_taps + i];
+//			tmp_L = d_correlator_outs_accu[3 * d_trk_parameters.medll_taps + 2 + i];
+//			tmp_x[d_trk_parameters.medll_taps + i] = double(i) * d_trk_parameters.medll_space_chips;
+//			tmp_y[d_trk_parameters.medll_taps + i] = dll_nc_e_minus_l_normalized(tmp_E, tmp_L, d_trk_parameters.spc, d_trk_parameters.slope, d_trk_parameters.y_intercept);
+//		}
+//		// The least square method fits a line
+//		float A = 0.0;
+//		float B = 0.0;
+//		float C = 0.0;
+//		float D = 0.0;
+//		float E = 0.0;
+//		float F = 0.0;
+//		for (int i=0; i<n; i++)
+//		{
+//			A += tmp_x[i] * tmp_x[i];
+//			B += tmp_x[i];
+//			C += tmp_x[i] * tmp_y[i];
+//			D += tmp_y[i];
+//		}
+//		float a, b, temp = 0;
+//		temp = (n*A - B*B);
+//		if(temp)
+//		{
+//			a = (n*C - B*D) / temp;
+//			b = (A*D - B*C) / temp;
+//			d_SCB = - b / a;
+//		}
+//		else
+//		{
+//			d_SCB = 0;
+//		}
+//		
+//		float Xmean, Ymean;
+//		Xmean = B / n;
+//		Ymean = D / n;
+//		float tempSumXX = 0.0, tempSumYY = 0.0;
+//		for (int i=0; i<n; i++)
+//		{
+//			tempSumXX += (tmp_x[i] - Xmean) * (tmp_x[i] - Xmean);
+//			tempSumYY += (tmp_y[i] - Ymean) * (tmp_y[i] - Ymean);
+//			E += (tmp_x[i] - Xmean) * (tmp_y[i] - Ymean);
+//		}
+//		F = sqrt(tempSumXX) * sqrt(tempSumYY);
+//		d_SCB_r = E / F;
+//	}
     
     return true;
 }
@@ -2185,27 +2173,9 @@ int dll_pll_veml_tracking::general_work(int noutput_items __attribute__((unused)
                                             }
                                         else
                                             {
-												if (!d_trk_parameters.medll_open)
-												{
-													d_local_code_shift_chips[0] = -d_trk_parameters.early_late_space_narrow_chips * static_cast<float>(d_code_samples_per_chip);
-													d_local_code_shift_chips[2] = d_trk_parameters.early_late_space_narrow_chips * static_cast<float>(d_code_samples_per_chip);
-													d_trk_parameters.spc = d_trk_parameters.early_late_space_narrow_chips;
-												}
-												else
-												{
-													for(int i=0; i<=d_trk_parameters.medll_taps; i++)
-													{
-														// E left
-														d_local_code_shift_chips[d_trk_parameters.medll_taps - i] = (-d_trk_parameters.early_late_space_narrow_chips - static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-														// E right
-														d_local_code_shift_chips[d_trk_parameters.medll_taps + i] = (-d_trk_parameters.early_late_space_narrow_chips + static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-														// L left
-														d_local_code_shift_chips[3 * d_trk_parameters.medll_taps + 2 - i] = (d_trk_parameters.early_late_space_narrow_chips - static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-														// L right
-														d_local_code_shift_chips[3 * d_trk_parameters.medll_taps + 2 + i] = (d_trk_parameters.early_late_space_narrow_chips + static_cast<float>(i) * d_trk_parameters.medll_space_chips) * static_cast<float>(d_code_samples_per_chip);
-													}
-													d_trk_parameters.spc = d_trk_parameters.early_late_space_narrow_chips;
-												}
+												d_local_code_shift_chips[0] = -d_trk_parameters.early_late_space_narrow_chips * static_cast<float>(d_code_samples_per_chip);
+												d_local_code_shift_chips[2] = d_trk_parameters.early_late_space_narrow_chips * static_cast<float>(d_code_samples_per_chip);
+												d_trk_parameters.spc = d_trk_parameters.early_late_space_narrow_chips;
                                             }
                                     }
                                 else

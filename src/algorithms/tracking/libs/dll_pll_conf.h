@@ -82,8 +82,8 @@ public:
     bool dump_mat{true};
     // MEDLL
     bool medll_open{false};
-    float medll_start_chip{0};
-    int32_t medll_taps{16};
+    float medll_start_chip{-1};
+    int32_t medll_taps{21};
     float medll_step_chip{0.1};
 };
 
