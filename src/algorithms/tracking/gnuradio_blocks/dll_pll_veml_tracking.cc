@@ -488,6 +488,10 @@ dll_pll_veml_tracking::dll_pll_veml_tracking(const Dll_Pll_Conf &conf_)
 			{
 				d_n_correlator_taps = d_n_correlator_taps + d_trk_parameters.medll_taps;
 			}
+			if (d_trk_parameters.rref_open)
+			{
+				d_n_correlator_taps = d_n_correlator_taps + 1;
+			}
         }
 
     d_correlator_outs = volk_gnsssdr::vector<gr_complex>(d_n_correlator_taps);
@@ -525,6 +529,10 @@ dll_pll_veml_tracking::dll_pll_veml_tracking(const Dll_Pll_Conf &conf_)
 				{
 					d_local_code_shift_chips[i+3] = (d_trk_parameters.medll_start_chip +  static_cast<float>(i) * d_trk_parameters.medll_step_chip) * static_cast<float>(d_code_samples_per_chip);
 				}
+			}
+			if (d_trk_parameters.rref_open)
+			{
+				d_local_code_shift_chips[d_trk_parameters.medll_taps+3] = d_trk_parameters.rref_chip;
 			}
         }
 
@@ -876,6 +884,10 @@ void dll_pll_veml_tracking::start_tracking()
 				{
 					d_local_code_shift_chips[i+3] = (d_trk_parameters.medll_start_chip +  static_cast<float>(i) * d_trk_parameters.medll_step_chip) * static_cast<float>(d_code_samples_per_chip);
 				}
+			}
+			if (d_trk_parameters.rref_open)
+			{
+				d_local_code_shift_chips[d_trk_parameters.medll_taps+3] = d_trk_parameters.rref_chip;
 			}
         }
 

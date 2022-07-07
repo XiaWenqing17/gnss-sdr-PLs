@@ -85,6 +85,8 @@ public:
     float medll_start_chip{-1};
     int32_t medll_taps{21};
     float medll_step_chip{0.1};
+    bool rref_open{false};
+    float rref_chip{2};
 };
 
 
